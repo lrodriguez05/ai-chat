@@ -1,8 +1,7 @@
 import { groqService } from "./services/groq";
 import { cerebrasService } from "./services/cerebras";
 
-const services = [groqService, cerebrasService];
-
+const services = [cerebrasService];
 let currentServiceIndex = 0;
 
 function getNextService() {
@@ -11,25 +10,45 @@ function getNextService() {
   return service;
 }
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*", // ⚠️ en prod pon tu dominio
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
 const server = Bun.serve({
   port: 5555,
   async fetch(req) {
     const { pathname } = new URL(req.url);
+
+    // 🔹 Preflight CORS
+    if (req.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: corsHeaders,
+      });
+    }
+
     if (req.method === "POST" && pathname === "/chat") {
       const { messages } = await req.json();
       const service = getNextService();
-      const stream = await service?.chat(messages);
+      const stream = await service.chat(messages);
 
       return new Response(stream, {
         headers: {
+          ...corsHeaders,
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
           Connection: "keep-alive",
         },
       });
     }
-    return new Response("Not Found", { status: 404 });
+
+    return new Response("Not Found", {
+      status: 404,
+      headers: corsHeaders,
+    });
   },
 });
 
-console.log(`El servidor esta funcionando en el puerto ${server.url}`);
+console.log(`Servidor corriendo en ${server.url}`);
